@@ -1,4 +1,19 @@
 const nodemailer = require('nodemailer');
+const dns = require('dns').promises;
+
+// 预先解析 DNS（用于解决 serverless 环境的 DNS 问题）
+async function resolveHostname(hostname) {
+    try {
+        const addresses = await dns.resolve4(hostname);
+        if (addresses && addresses.length > 0) {
+            console.log(`DNS解析成功: ${hostname} -> ${addresses[0]}`);
+            return addresses[0];
+        }
+    } catch (error) {
+        console.warn(`DNS解析失败: ${hostname}`, error.message);
+    }
+    return null;
+}
 
 // 创建邮件传输器
 function createTransporter() {
@@ -32,6 +47,13 @@ function createTransporter() {
     // 如果使用587端口，需要配置TLS
     if (smtpPort === 587) {
         transporterConfig.requireTLS = true;
+        transporterConfig.tls = {
+            rejectUnauthorized: false
+        };
+    }
+
+    // 对于 465 端口，也配置 TLS
+    if (smtpPort === 465) {
         transporterConfig.tls = {
             rejectUnauthorized: false
         };
@@ -99,9 +121,17 @@ async function sendTreeholeEmail(content) {
     };
 
     try {
-        // 验证连接
-        await transporter.verify();
-        console.log('SMTP服务器连接验证成功');
+        // 先尝试解析 DNS（帮助解决 serverless 环境的 DNS 问题）
+        const smtpHost = process.env.SMTP_HOST || 'smtp.qq.com';
+        try {
+            await resolveHostname(smtpHost);
+        } catch (dnsError) {
+            console.warn('DNS预解析失败，但继续尝试发送邮件:', dnsError.message);
+        }
+        
+        // 验证连接（跳过验证，直接发送，因为验证也可能触发 DNS 问题）
+        // await transporter.verify();
+        // console.log('SMTP服务器连接验证成功');
         
         const info = await transporter.sendMail(mailOptions);
         console.log('邮件发送成功:', info.messageId);
@@ -120,6 +150,10 @@ async function sendTreeholeEmail(content) {
             error.message = `无法连接到邮件服务器 ${process.env.SMTP_HOST}:${process.env.SMTP_PORT}，请检查网络和服务器配置`;
         } else if (error.code === 'ETIMEDOUT') {
             error.message = '邮件服务器连接超时，请检查网络连接';
+        } else if (error.code === 'EBADNAME' || error.message.includes('EBADNAME') || error.message.includes('queryA')) {
+            error.message = 'DNS解析失败，无法解析SMTP服务器地址。这可能是serverless环境的DNS限制，请稍后重试或联系管理员';
+        } else if (error.code === 'ENOTFOUND' || error.message.includes('ENOTFOUND')) {
+            error.message = '无法找到SMTP服务器，请检查SMTP_HOST配置是否正确';
         }
         
         throw error;
