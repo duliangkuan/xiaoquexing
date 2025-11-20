@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>小确幸日记</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <div class="container">
+        <!-- 右上角查看历史入口 -->
+        <button class="history-btn" id="historyBtn" title="查看历史小确幸">
+            <span class="icon">📅</span>
+        </button>
+
+        <!-- 中央主编辑区 -->
+        <div class="main-card">
+            <div class="card-header">
+                <h1 class="title">📖 记录今天的小确幸</h1>
+                <div class="date-display" id="dateDisplay"></div>
+            </div>
+            <div class="editor-container">
+                <textarea 
+                    id="diaryEditor" 
+                    class="diary-editor" 
+                    placeholder="写下今天让你感到幸福的小事..."
+                    autofocus
+                ></textarea>
+            </div>
+            <div class="card-footer">
+                <button class="save-btn" id="saveBtn">
+                    <span class="btn-icon">💕</span>
+                    <span class="btn-text">保存小确幸</span>
+                </button>
+            </div>
+            <div class="toast" id="toast"></div>
+        </div>
+
+        <!-- 右下角漂流瓶按钮 -->
+        <div class="bottle-container" id="bottleBtn">
+            <div class="bottle">
+                <div class="bottle-neck"></div>
+                <div class="bottle-body">
+                    <div class="bubble bubble-1"></div>
+                    <div class="bubble bubble-2"></div>
+                    <div class="bubble bubble-3"></div>
+                </div>
+            </div>
+            <div class="bottle-shine"></div>
+        </div>
+
+        <!-- 查看历史模态框 -->
+        <div class="modal" id="historyModal">
+            <div class="modal-content">
+                <span class="close-btn" id="closeHistoryBtn">&times;</span>
+                <h2>查看历史小确幸</h2>
+                <div class="password-section">
+                    <input 
+                        type="password" 
+                        id="passwordInput" 
+                        placeholder="请输入密码"
+                        class="password-input"
+                    >
+                    <button class="submit-btn" id="viewHistoryBtn">查看历史</button>
+                </div>
+                <div class="history-content" id="historyContent"></div>
+            </div>
+        </div>
+
+        <!-- 树洞倾诉模态框 -->
+        <div class="modal" id="treeholeModal">
+            <div class="modal-content treehole-content">
+                <span class="close-btn" id="closeTreeholeBtn">&times;</span>
+                <h2>树洞倾诉 💌</h2>
+                <div class="treehole-editor-container">
+                    <textarea 
+                        id="treeholeEditor" 
+                        class="treehole-editor" 
+                        placeholder="把你想说的话都倾诉出来吧..."
+                    ></textarea>
+                </div>
+                <button class="submit-btn treehole-submit" id="sendTreeholeBtn">
+                    <span class="btn-icon">✉️</span>
+                    <span class="btn-text">倾诉</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/js/app.js"></script>
+</body>
+</html>
+
