@@ -89,8 +89,9 @@ async function resolveHostname(hostname) {
 // 创建邮件传输器（支持使用IP地址）
 function createTransporter(smtpIp = null) {
     const smtpHost = process.env.SMTP_HOST || 'smtp.qq.com';
-    const smtpPort = parseInt(process.env.SMTP_PORT || '465');
-    const smtpSecure = smtpPort === 465; // 465端口使用SSL，587端口使用TLS
+    const smtpPort = parseInt(process.env.SMTP_PORT || '587'); // 默认使用587端口（STARTTLS）
+    // 465端口使用SSL（secure=true），587端口使用STARTTLS（secure=false, requireTLS=true）
+    const smtpSecure = smtpPort === 465;
     const smtpUser = process.env.SMTP_USER;
     const smtpPass = process.env.SMTP_PASS;
     const recipientEmail = process.env.RECIPIENT_EMAIL;
@@ -141,17 +142,25 @@ function createTransporter(smtpIp = null) {
         transporterConfig.requireTLS = false; // 使用secure时不需要requireTLS
     }
 
-    // 如果使用587端口，需要配置TLS
+    // 如果使用587端口，需要配置TLS（STARTTLS）
     if (smtpPort === 587) {
         transporterConfig.requireTLS = true;
+        transporterConfig.secure = false; // 587端口不使用SSL，而是STARTTLS
         transporterConfig.tls = {
             rejectUnauthorized: false,
-            servername: smtpHost // 指定服务器名称用于TLS
+            servername: smtpHost, // 指定服务器名称用于TLS
+            // 如果使用IP地址，确保TLS使用正确的主机名
+            ...(smtpIp ? {
+                host: smtpHost, // TLS握手时使用域名而不是IP
+                checkServerIdentity: () => undefined // 跳过服务器身份检查，避免DNS问题
+            } : {})
         };
+        console.log(`[TLS配置] 587端口（STARTTLS），servername: ${smtpHost}，使用IP: ${smtpIp || '否'}`);
     }
 
-    // 对于 465 端口，也配置 TLS
+    // 对于 465 端口，使用SSL
     if (smtpPort === 465) {
+        transporterConfig.secure = true; // 465端口使用SSL
         transporterConfig.tls = {
             rejectUnauthorized: false, // 在serverless环境中可能需要关闭证书验证
             servername: smtpHost, // 指定服务器名称用于TLS证书验证
@@ -161,7 +170,7 @@ function createTransporter(smtpIp = null) {
                 checkServerIdentity: () => undefined // 跳过服务器身份检查，避免DNS问题
             } : {})
         };
-        console.log(`[TLS配置] 465端口，servername: ${smtpHost}，使用IP: ${smtpIp || '否'}`);
+        console.log(`[TLS配置] 465端口（SSL），servername: ${smtpHost}，使用IP: ${smtpIp || '否'}`);
     }
 
     return nodemailer.createTransport(transporterConfig);
