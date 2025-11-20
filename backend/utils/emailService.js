@@ -124,7 +124,12 @@ function createTransporter(smtpIp = null) {
     if (smtpIp) {
         transporterConfig.name = smtpHost; // 用于SNI
         transporterConfig.hostname = smtpHost; // 用于TLS证书验证
-        transporterConfig.lookup = false; // 禁用DNS查找（因为已经使用IP地址）
+        // 使用自定义lookup函数，直接返回IP地址，完全避免DNS解析
+        transporterConfig.lookup = function(hostname, options, callback) {
+            // 直接使用IP地址，不进行任何DNS查找
+            console.log(`使用自定义lookup函数，直接返回IP地址: ${smtpIp}`);
+            callback(null, smtpIp, 4); // 返回IP地址和IPv4类型
+        };
         // 强制使用IP地址，避免任何DNS查找
         transporterConfig.resolveHostname = false;
         // 确保nodemailer不会尝试解析主机名
