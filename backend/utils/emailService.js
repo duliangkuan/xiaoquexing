@@ -128,9 +128,13 @@ function createTransporter(smtpIp = null) {
         // 使用自定义lookup函数，直接返回IP地址，完全避免DNS解析
         transporterConfig.lookup = function(hostname, options, callback) {
             // 直接使用IP地址，不进行任何DNS查找
-            console.log(`使用自定义lookup函数，直接返回IP地址: ${smtpIp}`);
-            callback(null, smtpIp, 4); // 返回IP地址和IPv4类型
+            console.log(`[自定义lookup] 跳过DNS解析，直接返回IP地址: ${smtpIp} (原始hostname: ${hostname})`);
+            // 使用setImmediate确保异步执行
+            setImmediate(() => {
+                callback(null, smtpIp, 4); // 返回IP地址和IPv4类型
+            });
         };
+        console.log(`[Transporter配置] 使用IP地址连接: ${smtpIp}，TLS主机名: ${smtpHost}`);
         // 强制使用IP地址，避免任何DNS查找
         transporterConfig.resolveHostname = false;
         // 确保nodemailer不会尝试解析主机名
@@ -275,9 +279,14 @@ async function sendTreeholeEmail(content) {
             }
             
             // 发送邮件
+            console.log(`[发送邮件] 开始发送邮件到: ${recipientEmail}`);
+            console.log(`[发送邮件] 使用SMTP服务器: ${smtpIp ? smtpIp + ' (IP)' : smtpHost + ' (域名)'}:${process.env.SMTP_PORT || '465'}`);
+            
             const info = await transporter.sendMail(mailOptions);
-            console.log('邮件发送成功:', info.messageId);
-            console.log('收件人:', recipientEmail);
+            console.log('[发送邮件] ✅ 邮件发送成功!');
+            console.log('[发送邮件] MessageId:', info.messageId);
+            console.log('[发送邮件] 收件人:', recipientEmail);
+            console.log('[发送邮件] 响应:', info.response);
             return true;
             
         } catch (error) {
