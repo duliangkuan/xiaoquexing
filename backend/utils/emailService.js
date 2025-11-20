@@ -11,8 +11,10 @@ let ipCache = {
 const CACHE_DURATION = 3600000; // 缓存1小时
 
 // QQ邮箱SMTP备用IP地址（如果DNS解析失败）
+// 这些IP地址可能会变化，如果连接失败，可能需要查找最新的IP地址
 const QQ_SMTP_IPS = [
-    '140.249.11.194',  // QQ邮箱SMTP常见IP
+    '14.17.57.61',     // QQ邮箱SMTP服务器IP（2024年最新）
+    '140.249.11.194',  // QQ邮箱SMTP常见IP（备用）
     '163.177.90.124'   // 备用IP
 ];
 
@@ -118,12 +120,15 @@ function createTransporter(smtpIp = null) {
         disableUrlAccess: true // 禁用URL访问
     };
 
-    // 如果使用IP地址，需要设置hostname用于TLS验证，并禁用DNS查找
+    // 如果使用IP地址，需要设置hostname用于TLS验证，并完全禁用DNS查找
     if (smtpIp) {
         transporterConfig.name = smtpHost; // 用于SNI
         transporterConfig.hostname = smtpHost; // 用于TLS证书验证
         transporterConfig.lookup = false; // 禁用DNS查找（因为已经使用IP地址）
-        transporterConfig.resolveHostname = false; // 禁用主机名解析
+        // 强制使用IP地址，避免任何DNS查找
+        transporterConfig.resolveHostname = false;
+        // 确保nodemailer不会尝试解析主机名
+        transporterConfig.requireTLS = false; // 使用secure时不需要requireTLS
     }
 
     // 如果使用587端口，需要配置TLS
