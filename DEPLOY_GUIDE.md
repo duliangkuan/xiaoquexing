@@ -115,7 +115,7 @@ git push -u origin main
    | `SMTP_HOST` | `smtp.qq.com` | QQ邮箱SMTP服务器 |
    | `SMTP_PORT` | `465` | SMTP端口 |
    | `SMTP_USER` | `2330304961@qq.com` | 发件人QQ邮箱 |
-   | `SMTP_PASS` | `gbedglcqrgsydigi` | QQ邮箱授权码 |
+   | `SMTP_PASS` | `bwzqgvsfgehwdjde` | QQ邮箱授权码 |
    | `RECIPIENT_EMAIL` | `2330304961@qq.com` | 收件人邮箱 |
 
    **重要**：每个变量都要分别添加，确保：
