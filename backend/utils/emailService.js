@@ -45,11 +45,19 @@ async function sendTreeholeEmail(content) {
     const transporter = createTransporter();
     
     if (!transporter) {
-        throw new Error('邮件服务未配置');
+        const missing = [];
+        if (!process.env.SMTP_USER) missing.push('SMTP_USER');
+        if (!process.env.SMTP_PASS) missing.push('SMTP_PASS');
+        if (!process.env.RECIPIENT_EMAIL) missing.push('RECIPIENT_EMAIL');
+        throw new Error(`邮件服务未配置，缺少环境变量: ${missing.join(', ')}`);
     }
 
     const recipientEmail = process.env.RECIPIENT_EMAIL;
     const smtpUser = process.env.SMTP_USER;
+    
+    if (!recipientEmail || !smtpUser) {
+        throw new Error('邮件配置不完整：缺少收件人或发件人邮箱');
+    }
     
     const now = new Date();
     const dateStr = now.toLocaleString('zh-CN', {
@@ -60,6 +68,20 @@ async function sendTreeholeEmail(content) {
         minute: '2-digit'
     });
 
+    // 转义HTML内容，防止XSS攻击
+    const escapeHtml = (text) => {
+        const map = {
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#039;'
+        };
+        return text.replace(/[&<>"']/g, m => map[m]);
+    };
+
+    const escapedContent = escapeHtml(content);
+
     const mailOptions = {
         from: `"树洞倾诉" <${smtpUser}>`,
         to: recipientEmail,
@@ -69,7 +91,7 @@ async function sendTreeholeEmail(content) {
             <div style="font-family: 'Microsoft YaHei', Arial, sans-serif; padding: 20px; background-color: #FFF5F5; border-radius: 10px;">
                 <h2 style="color: #E91E63; margin-bottom: 20px;">树洞倾诉 💌</h2>
                 <div style="background-color: white; padding: 20px; border-radius: 8px; border-left: 4px solid #FFB6C1; white-space: pre-wrap; line-height: 1.8; color: #4A4A4A;">
-                    ${content.replace(/\n/g, '<br>')}
+                    ${escapedContent.replace(/\n/g, '<br>')}
                 </div>
                 <p style="color: #C97D9E; margin-top: 20px; font-size: 12px;">时间: ${dateStr}</p>
             </div>
@@ -77,11 +99,29 @@ async function sendTreeholeEmail(content) {
     };
 
     try {
+        // 验证连接
+        await transporter.verify();
+        console.log('SMTP服务器连接验证成功');
+        
         const info = await transporter.sendMail(mailOptions);
         console.log('邮件发送成功:', info.messageId);
+        console.log('收件人:', recipientEmail);
         return true;
     } catch (error) {
-        console.error('邮件发送失败:', error);
+        console.error('邮件发送失败详情:');
+        console.error('错误代码:', error.code);
+        console.error('错误消息:', error.message);
+        console.error('响应:', error.response);
+        
+        // 提供更详细的错误信息
+        if (error.code === 'EAUTH') {
+            error.message = '邮箱认证失败，请检查SMTP_USER和SMTP_PASS（授权码）是否正确';
+        } else if (error.code === 'ECONNECTION') {
+            error.message = `无法连接到邮件服务器 ${process.env.SMTP_HOST}:${process.env.SMTP_PORT}，请检查网络和服务器配置`;
+        } else if (error.code === 'ETIMEDOUT') {
+            error.message = '邮件服务器连接超时，请检查网络连接';
+        }
+        
         throw error;
     }
 }

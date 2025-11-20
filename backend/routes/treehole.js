@@ -40,14 +40,32 @@ router.post('/send', async (req, res) => {
         // 发送邮件
         try {
             await sendTreeholeEmail(content.trim());
+            console.log('邮件发送成功');
         } catch (emailError) {
-            console.error('邮件发送失败，但已保存记录:', emailError);
-            // 即使邮件发送失败，也返回成功（因为已经保存到数据库）
-            // 如果需要严格要求邮件发送成功，可以取消下面的注释
-            // return res.json({
-            //     success: false,
-            //     message: '邮件发送失败，请检查配置'
-            // });
+            console.error('邮件发送失败:', emailError);
+            
+            // 构建详细的错误信息
+            let errorMessage = '邮件发送失败';
+            
+            if (emailError.message) {
+                if (emailError.message.includes('邮件服务未配置')) {
+                    errorMessage = '邮件服务未配置，请检查环境变量设置';
+                } else if (emailError.code === 'EAUTH') {
+                    errorMessage = '邮件认证失败，请检查SMTP_USER和SMTP_PASS配置';
+                } else if (emailError.code === 'ECONNECTION') {
+                    errorMessage = '无法连接到邮件服务器，请检查SMTP_HOST和SMTP_PORT配置';
+                } else if (emailError.message.includes('Invalid login')) {
+                    errorMessage = '邮箱登录失败，请检查授权码是否正确';
+                } else {
+                    errorMessage = `邮件发送失败: ${emailError.message}`;
+                }
+            }
+            
+            // 返回错误信息给用户
+            return res.json({
+                success: false,
+                message: errorMessage
+            });
         }
 
         res.json({
