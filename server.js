@@ -9,6 +9,40 @@ const treeholeRoutes = require('./backend/routes/treehole');
 
 const app = express();
 
+// 隐藏Express的x-powered-by头部
+app.disable('x-powered-by');
+
+// 安全头部中间件
+app.use((req, res, next) => {
+    // 设置安全相关的HTTP头部
+    res.setHeader('X-Content-Type-Options', 'nosniff'); // 防止MIME类型嗅探
+    res.setHeader('X-Frame-Options', 'SAMEORIGIN'); // 防止点击劫持（将被CSP替代，但为了兼容性保留）
+    res.setHeader('X-XSS-Protection', '1; mode=block'); // XSS保护
+    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin'); // 推荐人策略
+    
+    // 设置Content Security Policy (CSP)
+    // 允许来自同源的资源，以及允许内联脚本和样式（用于简单的单页应用）
+    const csp = [
+        "default-src 'self'",
+        "script-src 'self' 'unsafe-inline' 'unsafe-eval'", // 允许内联脚本（如果需要可以更严格）
+        "style-src 'self' 'unsafe-inline'", // 允许内联样式
+        "img-src 'self' data: https:", // 允许图片和数据URI
+        "font-src 'self' data:", // 允许字体和数据URI
+        "connect-src 'self' https://api.vercel.app", // 允许API请求
+        "frame-ancestors 'self'", // 替代X-Frame-Options
+        "base-uri 'self'", // 限制base标签的URI
+        "form-action 'self'", // 限制表单提交
+        "object-src 'none'", // 禁止object、embed等标签
+        "upgrade-insecure-requests" // 自动升级HTTP到HTTPS
+    ].join('; ');
+    res.setHeader('Content-Security-Policy', csp);
+    
+    // 设置缓存控制（替代Expires头部）
+    res.setHeader('Cache-Control', 'public, max-age=3600'); // 缓存1小时
+    
+    next();
+});
+
 // 中间件
 // CORS配置：支持自定义域名和Vercel默认域名
 const allowedOrigins = [
