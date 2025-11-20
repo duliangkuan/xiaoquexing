@@ -11,11 +11,12 @@ let ipCache = {
 const CACHE_DURATION = 3600000; // 缓存1小时
 
 // QQ邮箱SMTP备用IP地址（如果DNS解析失败）
-// 这些IP地址可能会变化，如果连接失败，可能需要查找最新的IP地址
+// 注意：这些IP地址可能会变化，如果连接失败，需要查找最新的IP地址
+// QQ邮箱SMTP服务器的IP地址通常是腾讯的服务器，可能会动态变化
 const QQ_SMTP_IPS = [
-    '14.17.57.61',     // QQ邮箱SMTP服务器IP（2024年最新）
-    '140.249.11.194',  // QQ邮箱SMTP常见IP（备用）
-    '163.177.90.124'   // 备用IP
+    '140.249.11.194',  // QQ邮箱SMTP常见IP（优先使用）
+    '163.177.90.124',  // 备用IP
+    '14.17.57.61'      // 备用IP
 ];
 
 // 预先解析 DNS（用于解决 serverless 环境的 DNS 问题）
@@ -148,9 +149,15 @@ function createTransporter(smtpIp = null) {
     // 对于 465 端口，也配置 TLS
     if (smtpPort === 465) {
         transporterConfig.tls = {
-            rejectUnauthorized: false,
-            servername: smtpHost // 指定服务器名称用于TLS
+            rejectUnauthorized: false, // 在serverless环境中可能需要关闭证书验证
+            servername: smtpHost, // 指定服务器名称用于TLS证书验证
+            // 如果使用IP地址，确保TLS使用正确的主机名
+            ...(smtpIp ? {
+                host: smtpHost, // TLS握手时使用域名而不是IP
+                checkServerIdentity: () => undefined // 跳过服务器身份检查，避免DNS问题
+            } : {})
         };
+        console.log(`[TLS配置] 465端口，servername: ${smtpHost}，使用IP: ${smtpIp || '否'}`);
     }
 
     return nodemailer.createTransport(transporterConfig);
@@ -229,9 +236,11 @@ async function sendTreeholeEmail(content) {
             } 
             // 策略2: 如果是QQ邮箱，直接使用备用IP（避免DNS解析）
             else if (smtpHost === 'smtp.qq.com') {
-                // 在serverless环境中，直接使用备用IP，避免DNS解析问题
-                smtpIp = QQ_SMTP_IPS[0];
-                console.log(`使用QQ邮箱备用IP地址（跳过DNS解析）: ${smtpIp}`);
+                // 在serverless环境中，直接使用备用IP，完全跳过DNS解析
+                // 根据重试次数选择不同的IP地址
+                const ipIndex = Math.min(attempt - 1, QQ_SMTP_IPS.length - 1);
+                smtpIp = QQ_SMTP_IPS[ipIndex];
+                console.log(`使用QQ邮箱备用IP地址（完全跳过DNS解析）: ${smtpIp} (第${ipIndex + 1}个IP，尝试${attempt}/${maxRetries})`);
             }
             // 策略3: 其他邮箱，尝试DNS解析（带超时）
             else {
@@ -273,9 +282,19 @@ async function sendTreeholeEmail(content) {
             
         } catch (error) {
             lastError = error;
-            console.error(`第 ${attempt} 次尝试失败:`);
-            console.error('错误代码:', error.code);
-            console.error('错误消息:', error.message);
+            console.error(`[发送邮件] ❌ 第 ${attempt}/${maxRetries} 次尝试失败`);
+            console.error('[错误详情] 错误代码:', error.code || 'N/A');
+            console.error('[错误详情] 错误消息:', error.message);
+            console.error('[错误详情] 错误堆栈:', error.stack);
+            if (error.response) {
+                console.error('[错误详情] SMTP响应:', error.response);
+            }
+            if (error.responseCode) {
+                console.error('[错误详情] SMTP响应代码:', error.responseCode);
+            }
+            if (error.command) {
+                console.error('[错误详情] 失败的SMTP命令:', error.command);
+            }
             
             // 判断是否是DNS相关错误
             const isDnsError = error.code === 'EBADNAME' || 
