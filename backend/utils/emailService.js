@@ -10,9 +10,21 @@ let ipCache = {
 };
 const CACHE_DURATION = 3600000; // 缓存1小时
 
+// QQ邮箱SMTP备用IP地址（如果DNS解析失败）
+const QQ_SMTP_IPS = [
+    '140.249.11.194',  // QQ邮箱SMTP常见IP
+    '163.177.90.124'   // 备用IP
+];
+
 // 预先解析 DNS（用于解决 serverless 环境的 DNS 问题）
 async function resolveHostname(hostname) {
     try {
+        // 如果环境变量中配置了SMTP_IP，直接使用
+        if (process.env.SMTP_IP) {
+            console.log(`使用环境变量配置的IP地址: ${process.env.SMTP_IP}`);
+            return process.env.SMTP_IP;
+        }
+
         // 先检查缓存
         const now = Date.now();
         if (ipCache.hostname === hostname && 
@@ -25,8 +37,10 @@ async function resolveHostname(hostname) {
         // 尝试多种DNS解析方法
         let addresses = [];
         
-        // 方法1: 使用 resolve4
+        // 方法1: 使用 resolve4（尝试指定DNS服务器）
         try {
+            // 使用Google DNS服务器解析
+            dnsPromises.setServers(['8.8.8.8', '8.8.4.4', '1.1.1.1']);
             addresses = await dnsPromises.resolve4(hostname);
         } catch (e) {
             console.warn('resolve4失败，尝试lookup方法:', e.message);
@@ -35,7 +49,10 @@ async function resolveHostname(hostname) {
         // 方法2: 如果resolve4失败，使用lookup
         if (!addresses || addresses.length === 0) {
             try {
-                const result = await dnsPromises.lookup(hostname, { family: 4 });
+                const result = await dnsPromises.lookup(hostname, { 
+                    family: 4,
+                    hints: dns.ADDRCONFIG
+                });
                 addresses = [result.address];
             } catch (e) {
                 console.warn('lookup也失败:', e.message);
@@ -56,6 +73,13 @@ async function resolveHostname(hostname) {
     } catch (error) {
         console.warn(`DNS解析失败: ${hostname}`, error.message);
     }
+    
+    // 如果所有DNS解析方法都失败，且是QQ邮箱，返回备用IP
+    if (hostname === 'smtp.qq.com') {
+        console.warn('DNS解析失败，返回QQ邮箱备用IP地址');
+        return QQ_SMTP_IPS[0];
+    }
+    
     return null;
 }
 
@@ -85,13 +109,21 @@ function createTransporter(smtpIp = null) {
         auth: {
             user: smtpUser,
             pass: smtpPass // 使用授权码，不是QQ密码
-        }
+        },
+        // 在serverless环境中，优化连接配置
+        connectionTimeout: 10000, // 10秒连接超时
+        greetingTimeout: 5000, // 5秒问候超时
+        socketTimeout: 10000, // 10秒Socket超时
+        disableFileAccess: true, // 禁用文件访问
+        disableUrlAccess: true // 禁用URL访问
     };
 
-    // 如果使用IP地址，需要设置hostname用于TLS验证
+    // 如果使用IP地址，需要设置hostname用于TLS验证，并禁用DNS查找
     if (smtpIp) {
         transporterConfig.name = smtpHost; // 用于SNI
         transporterConfig.hostname = smtpHost; // 用于TLS证书验证
+        transporterConfig.lookup = false; // 禁用DNS查找（因为已经使用IP地址）
+        transporterConfig.resolveHostname = false; // 禁用主机名解析
     }
 
     // 如果使用587端口，需要配置TLS
@@ -177,17 +209,39 @@ async function sendTreeholeEmail(content) {
         try {
             console.log(`尝试发送邮件 (第 ${attempt}/${maxRetries} 次)...`);
             
-            // 先尝试解析 DNS 获取 IP 地址
+            // 获取SMTP IP地址（优先使用备用IP，避免DNS解析问题）
             let smtpIp = null;
-            try {
-                smtpIp = await resolveHostname(smtpHost);
-                if (smtpIp) {
-                    console.log(`使用IP地址连接: ${smtpIp}`);
-                } else {
-                    console.warn('DNS解析失败，将使用域名连接');
+            
+            // 策略1: 优先使用环境变量配置的IP
+            if (process.env.SMTP_IP) {
+                smtpIp = process.env.SMTP_IP;
+                console.log(`使用环境变量配置的IP地址: ${smtpIp}`);
+            } 
+            // 策略2: 如果是QQ邮箱，直接使用备用IP（避免DNS解析）
+            else if (smtpHost === 'smtp.qq.com') {
+                // 在serverless环境中，直接使用备用IP，避免DNS解析问题
+                smtpIp = QQ_SMTP_IPS[0];
+                console.log(`使用QQ邮箱备用IP地址（跳过DNS解析）: ${smtpIp}`);
+            }
+            // 策略3: 其他邮箱，尝试DNS解析（带超时）
+            else {
+                try {
+                    // 设置DNS解析超时（3秒）
+                    const dnsPromise = resolveHostname(smtpHost);
+                    const timeoutPromise = new Promise((_, reject) => 
+                        setTimeout(() => reject(new Error('DNS解析超时')), 3000)
+                    );
+                    smtpIp = await Promise.race([dnsPromise, timeoutPromise]);
+                    if (smtpIp) {
+                        console.log(`使用DNS解析的IP地址: ${smtpIp}`);
+                    } else {
+                        console.warn('DNS解析失败，将使用域名连接');
+                    }
+                } catch (dnsError) {
+                    console.warn('DNS解析失败，将使用域名连接:', dnsError.message);
+                    // DNS解析失败时，不使用IP，直接使用域名
+                    smtpIp = null;
                 }
-            } catch (dnsError) {
-                console.warn('DNS预解析失败，将使用域名连接:', dnsError.message);
             }
 
             // 创建传输器（优先使用IP地址）
@@ -213,18 +267,28 @@ async function sendTreeholeEmail(content) {
             console.error('错误代码:', error.code);
             console.error('错误消息:', error.message);
             
-            // 如果是DNS相关错误且还有重试机会，等待后重试
+            // 判断是否是DNS相关错误
             const isDnsError = error.code === 'EBADNAME' || 
                              error.code === 'ENOTFOUND' || 
+                             error.code === 'ETIMEDOUT' ||
                              error.message.includes('EBADNAME') || 
                              error.message.includes('ENOTFOUND') ||
                              error.message.includes('queryA') ||
-                             error.message.includes('DNS解析失败');
+                             error.message.includes('DNS解析失败') ||
+                             error.message.includes('getaddrinfo') ||
+                             error.message.includes('timed out');
             
+            // 如果是DNS错误且还有重试机会
             if (isDnsError && attempt < maxRetries) {
+                // 如果是QQ邮箱且还没有使用IP地址，下次尝试使用备用IP
+                if (smtpHost === 'smtp.qq.com' && !smtpIp) {
+                    console.log('DNS错误，下次尝试将使用备用IP地址');
+                    // 下次循环会自动使用备用IP
+                }
+                
                 // 清除IP缓存，强制重新解析
                 ipCache = { hostname: null, ip: null, timestamp: 0 };
-                const waitTime = attempt * 1000; // 递增等待时间：1s, 2s, 3s
+                const waitTime = attempt * 2000; // 递增等待时间：2s, 4s, 6s
                 console.log(`DNS错误，等待 ${waitTime}ms 后重试...`);
                 await new Promise(resolve => setTimeout(resolve, waitTime));
                 continue;
