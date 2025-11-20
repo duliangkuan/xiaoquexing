@@ -36,7 +36,16 @@ router.post('/', async (req, res) => {
                 ...diary,
                 id: diaries.length + 1
             });
-            storage.writeDiaries(diaries);
+            const writeSuccess = storage.writeDiaries(diaries);
+            
+            // 检查写入是否成功（在serverless环境中可能失败）
+            if (!writeSuccess) {
+                console.error('JSON文件写入失败：serverless环境不支持文件写入');
+                return res.json({
+                    success: false,
+                    message: '保存失败：未配置数据库。请在Vercel环境变量中配置MONGODB_URI'
+                });
+            }
         }
 
         res.json({
@@ -45,9 +54,18 @@ router.post('/', async (req, res) => {
         });
     } catch (error) {
         console.error('保存日记错误:', error);
+        // 提供更详细的错误信息
+        let errorMessage = '保存失败，请重试';
+        
+        if (error.message && error.message.includes('MongoDB')) {
+            errorMessage = '数据库连接失败，请检查MONGODB_URI配置';
+        } else if (error.message && error.message.includes('serverless')) {
+            errorMessage = '保存失败：当前环境不支持文件存储。请配置MongoDB数据库';
+        }
+        
         res.json({
             success: false,
-            message: '保存失败，请重试'
+            message: errorMessage
         });
     }
 });
