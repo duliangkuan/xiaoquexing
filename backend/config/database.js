@@ -20,7 +20,6 @@ async function initDatabase() {
     try {
         // 如果没有MongoDB URI，使用JSON文件存储（备选方案）
         if (!process.env.MONGODB_URI || process.env.MONGODB_URI === 'mongodb://localhost:27017') {
-            console.log('使用JSON文件存储（MongoDB未配置）');
             return null;
         }
 
@@ -53,7 +52,6 @@ async function initDatabase() {
             
             await client.connect();
             db = client.db(DB_NAME);
-            console.log('MongoDB连接成功');
             return db;
         } finally {
             isConnecting = false;
@@ -89,7 +87,6 @@ async function closeDatabase() {
         await client.close();
         client = null;
         db = null;
-        console.log('MongoDB连接已关闭');
     }
 }
 

@@ -6,6 +6,7 @@ require('dotenv').config();
 
 const diaryRoutes = require('./backend/routes/diaries');
 const treeholeRoutes = require('./backend/routes/treehole');
+const { initTransporter, verifyConnection } = require('./backend/utils/email');
 
 const app = express();
 
@@ -107,6 +108,14 @@ app.use((err, req, res, next) => {
 const PORT = process.env.PORT || 3000;
 
 if (require.main === module) {
+    // 初始化邮件系统
+    initTransporter();
+    
+    // 验证邮件连接（异步，不阻塞服务器启动）
+    verifyConnection().catch(err => {
+        console.log('邮件系统将在配置完成后可用');
+    });
+    
     app.listen(PORT, () => {
         console.log(`服务器运行在 http://localhost:${PORT}`);
     });

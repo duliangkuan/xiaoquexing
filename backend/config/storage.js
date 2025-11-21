@@ -14,7 +14,6 @@ function ensureDataDir() {
         }
     } catch (error) {
         // 在serverless环境中可能没有写权限，忽略错误
-        console.warn('无法创建数据目录（serverless环境）:', error.message);
         return false;
     }
     return true;
@@ -35,7 +34,6 @@ function initFiles() {
         return true;
     } catch (error) {
         // 在serverless环境中可能没有写权限
-        console.warn('无法初始化文件（serverless环境）:', error.message);
         return false;
     }
 }
@@ -51,7 +49,6 @@ function readDiaries() {
         return JSON.parse(data);
     } catch (error) {
         // 在serverless环境中可能无法读取，返回空数组
-        console.warn('读取日记数据失败（可能是serverless环境）:', error.message);
         return [];
     }
 }
@@ -67,7 +64,6 @@ function writeDiaries(diaries) {
         return true;
     } catch (error) {
         // 在serverless环境中可能无法写入
-        console.warn('写入日记数据失败（可能是serverless环境）:', error.message);
         return false;
     }
 }
@@ -83,7 +79,6 @@ function readTreehole() {
         return JSON.parse(data);
     } catch (error) {
         // 在serverless环境中可能无法读取，返回空数组
-        console.warn('读取树洞数据失败（可能是serverless环境）:', error.message);
         return [];
     }
 }
@@ -99,7 +94,6 @@ function writeTreehole(logs) {
         return true;
     } catch (error) {
         // 在serverless环境中可能无法写入
-        console.warn('写入树洞数据失败（可能是serverless环境）:', error.message);
         return false;
     }
 }
