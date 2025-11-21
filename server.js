@@ -108,12 +108,16 @@ app.use((err, req, res, next) => {
 const PORT = process.env.PORT || 3000;
 
 if (require.main === module) {
-    // 初始化邮件系统
-    initTransporter();
-    
-    // 验证邮件连接（异步，不阻塞服务器启动）
-    verifyConnection().catch(err => {
-        console.log('邮件系统将在配置完成后可用');
+    // 初始化邮件系统（异步，不阻塞服务器启动）
+    initTransporter().then(transporter => {
+        if (transporter) {
+            // 验证邮件连接（异步，不阻塞服务器启动）
+            verifyConnection().catch(err => {
+                console.log('邮件系统将在配置完成后可用');
+            });
+        }
+    }).catch(err => {
+        console.log('邮件系统初始化失败，将在配置完成后可用');
     });
     
     app.listen(PORT, () => {

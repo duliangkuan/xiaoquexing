@@ -37,9 +37,15 @@ router.post('/send', async (req, res) => {
             storage.writeTreehole(logs);
         }
 
-        // 发送邮件通知（异步，不阻塞响应）
-        sendTreeholeNotification(content).catch(err => {
-            console.error('邮件发送失败（不影响主流程）:', err.message);
+        // 发送邮件通知（异步，不阻塞响应，静默失败）
+        sendTreeholeNotification(content).then(result => {
+            if (result.success) {
+                console.log('✅ 树洞邮件通知发送成功');
+            } else {
+                console.warn('⚠️ 树洞邮件通知发送失败（不影响主流程）:', result.message);
+            }
+        }).catch(err => {
+            console.warn('⚠️ 树洞邮件通知发送异常（不影响主流程）:', err.message);
         });
 
         res.json({
